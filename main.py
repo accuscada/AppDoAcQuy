@@ -59,8 +59,6 @@ init_db()
 # ==========================================
 def analyze_image_with_gemini(image_bytes: bytes):
     try:
-        def analyze_image_with_gemini(image_bytes: bytes):
-    try:
         # 1. Sử dụng mô hình gemini-2.5-flash
         model = genai.GenerativeModel('gemini-2.5-flash')
         
