@@ -59,31 +59,41 @@ init_db()
 # ==========================================
 def analyze_image_with_gemini(image_bytes: bytes):
     try:
-        # Sử dụng mô hình gemini-2.5-flash tối ưu đọc ảnh
+        def analyze_image_with_gemini(image_bytes: bytes):
+    try:
+        # 1. Sử dụng mô hình gemini-2.5-flash
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = """
         Bạn là chuyên gia OCR đọc màn hình máy đo ắc quy.
         Hãy đọc giá trị Điện áp (Volt / V) và Nội trở (milli-Ohm / mΩ hoặc Ω) trên màn hình.
-        Trả về kết quả chuẩn duy nhất dưới dạng JSON:
+        Trả về kết quả chuẩn duy nhất dưới dạng JSON thuần túy, KHÔNG dùng markdown codeblock:
         {"voltage": 12.65, "resistance": 4.15}
-        Nếu không đọc được, trả về: {"voltage": 0.0, "resistance": 0.0}
         """
         
         image = Image.open(io.BytesIO(image_bytes))
-        
         response = model.generate_content([prompt, image])
         text_response = response.text.strip()
         
-        # Lọc chuỗi JSON từ phản hồi của Gemini
-        json_match = re.search(r'\{.*\}', text_response, re.DOTALL)
+        # 2. Làm sạch chuỗi JSON (xóa bỏ markdown ```json nếu có)
+        text_response = re.sub(r'```json\s*', '', text_response)
+        text_response = re.sub(r'```\s*', '', text_response)
+        text_response = text_response.strip()
+        
+        # 3. Trích xuất JSON bằng Regex
+        json_match = re.search(r'\{.*?\}', text_response, re.DOTALL)
         if json_match:
             data = json.loads(json_match.group())
-            return float(data.get("voltage", 0.0)), float(data.get("resistance", 0.0))
+            v = float(data.get("voltage", 0.0))
+            r = float(data.get("resistance", 0.0))
+            return v, r
+            
         return 0.0, 0.0
     except Exception as e:
-        print(f"Lỗi AI OCR: {e}")
+        print(f"Lỗi AI OCR chi tiết: {e}")
         return 0.0, 0.0
+
+
 
 # ==========================================
 # 4. CAC ENDPOINTS API
