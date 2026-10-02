@@ -1,20 +1,30 @@
-import io
-import re
 import os
-import sys
-import base64
+import io
+import json
+import re
 import sqlite3
-import requests
-from datetime import datetime
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.middleware.cors import CORSMiddleware
+import pandas as pd
 from PIL import Image
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+import google.generativeai as genai
 
-# Sửa mã hóa ký tự UTF-8 cho Windows CMD
-sys.stdout.reconfigure(encoding='utf-8')
+# ==========================================
+# 1. CẤU HÌNH API KEY VÀ MODEL GEMINI
+# ==========================================
+# Thay chuỗi bên dưới bằng API Key thật của bạn (dạng AIzaSy...)
+API_KEY = "AQ.Ab8RN6LuW5GlCcCW1q9k-M8wGSh1rAlDHiIkFoX6LsFVFT_PMg"
 
-app = FastAPI()
+# Cấu hình Gemini API
+genai.configure(api_key=API_KEY)
 
+# ==========================================
+# 2. KHỞI TẠO DỊCH VỤ FASTAPI & CƠ SỞ DỮ LIỆU
+# ==========================================
+app = FastAPI(title="AccuField Vision Backend")
+
+# Cho phép kết nối CORS từ GitHub Pages / Mobile Browser
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,22 +33,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = "images_storage"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-DB_NAME = "battery_data.db"
+DB_NAME = "battery_reports.db"
 
-# --- 1. KHỞI TẠO CSDL SQLITE LƯU VẾT LỊCH SỬ ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS measure_history (
+        CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            station_name TEXT NOT NULL,
-            measure_date TEXT NOT NULL,
+            station_name TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             v1 REAL, r1 REAL,
             v2 REAL, r2 REAL,
-            avg_resistance REAL
+            img1_path TEXT, img2_path TEXT,
+            img3_path TEXT, img4_path TEXT, img5_path TEXT
         )
     ''')
     conn.commit()
@@ -46,170 +54,93 @@ def init_db():
 
 init_db()
 
-# Khai báo API Key của bạn
-import os
-import google.generativeai as genai
-
-# 1. Cấu hình API Key (Dán trực tiếp khóa API Key vừa copy vào đây)
-GEMINI_API_KEY = "AQ.Ab8RN6LuW5GlCcCW1q9k-M8wGSh1rAlDHiIkFoX6LsFVFT_PMg" 
-
-genai.configure(api_key=GEMINI_API_KEY)
-
-def analyze_battery_image(image_bytes):
+# ==========================================
+# 3. HÀM XỬ LÝ OCR BẰNG AI GEMINI
+# ==========================================
+def analyze_image_with_gemini(image_bytes: bytes):
     try:
-        # Sử dụng mô hình gemini-2.5-flash chuẩn nhất hiện tại
+        # Sử dụng mô hình gemini-2.5-flash tối ưu đọc ảnh
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = """
-        Hãy phân tích hình ảnh màn hình máy đo ắc quy này và trả về dữ liệu chuẩn JSON.
-        Yêu cầu trích xuất:
-        - voltage: Giá trị Điện áp (VDC)
-        - resistance: Giá trị Nội trở (mΩ hoặc Ω)
-        Chỉ trả về JSON thuần dạng: {"voltage": 13.5, "resistance": 4.2}
+        Bạn là chuyên gia OCR đọc màn hình máy đo ắc quy.
+        Hãy đọc giá trị Điện áp (Volt / V) và Nội trở (milli-Ohm / mΩ hoặc Ω) trên màn hình.
+        Trả về kết quả chuẩn duy nhất dưới dạng JSON:
+        {"voltage": 12.65, "resistance": 4.15}
+        Nếu không đọc được, trả về: {"voltage": 0.0, "resistance": 0.0}
         """
         
-        contents = [
-            prompt,
-            {"mime_type": "image/jpeg", "data": image_bytes}
-        ]
+        image = Image.open(io.BytesIO(image_bytes))
         
-        response = model.generate_content(contents)
-        return response.text
+        response = model.generate_content([prompt, image])
+        text_response = response.text.strip()
+        
+        # Lọc chuỗi JSON từ phản hồi của Gemini
+        json_match = re.search(r'\{.*\}', text_response, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            return float(data.get("voltage", 0.0)), float(data.get("resistance", 0.0))
+        return 0.0, 0.0
     except Exception as e:
-        print(f"Lỗi kết nối Gemini API: {e}")
-        return None
-# --- 2. API QUÉT ẢNH AI VISION ---
-@app.post("/api/scan-meter")
-async def scan_meter(file: UploadFile = File(...)):
-    """Sử dụng Gemini REST API trực tiếp bóc tách số Điện áp và Nội trở"""
-    try:
-        contents = await file.read()
-        base64_image = base64.b64encode(contents).decode('utf-8')
-        
-        prompt = (
-            "Trích xuất số điện áp (đơn vị V) và nội trở (đơn vị mΩ hoặc Ω) từ ảnh máy đo này.\n"
-            "Trả về duy nhất dạng JSON ngắn gọn không định dạng markdown:\n"
-            '{"voltage": 13.128, "resistance": 9.50}'
-        )
-        
-        models_to_try = [
-            "gemini-3.8-flash",
-            "gemini-3.5-flash",
-            "gemini-3.1-flash"
-        ]
-        text_result = None
+        print(f"Lỗi AI OCR: {e}")
+        return 0.0, 0.0
 
-        for model in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={API_KEY}"
-            payload = {
-                "contents": [{
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": base64_image
-                            }
-                        }
-                    ]
-                }]
-            }
-            res = requests.post(url, json=payload, timeout=30)
-            if res.status_code == 200:
-                try:
-                    text_result = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-                    break
-                except Exception:
-                    pass
+# ==========================================
+# 4. CAC ENDPOINTS API
+# ==========================================
 
-        if not text_result:
-            return {"status": "error", "message": "Không thể kết nối mô hình Gemini API."}
+@app.get("/")
+def root():
+    return {"status": "online", "message": "AccuField Vision API đang hoạt động!"}
 
-        voltage = None
-        resistance = None
-        
-        # Bóc tách điện áp
-        v_match = re.search(r'"voltage"\s*:\s*([\d\.]+)', text_result, re.IGNORECASE)
-        if not v_match:
-            v_match = re.search(r'(\d+[\.,]\d+|\d+)\s*[vV]', text_result)
-        if v_match:
-            voltage = float(v_match.group(1).replace(',', '.'))
-            
-        # Bóc tách nội trở
-        r_match = re.search(r'"resistance"\s*:\s*([\d\.]+)', text_result, re.IGNORECASE)
-        if not r_match:
-            r_match = re.search(r'(\d+[\.,]\d+|\d+)', text_result)
-        if r_match:
-            resistance = float(r_match.group(1).replace(',', '.'))
-            
-        return {"status": "success", "voltage": voltage, "resistance": resistance}
-        
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+@app.post("/api/ocr")
+async def ocr_endpoint(file: UploadFile = File(...)):
+    contents = await file.read()
+    voltage, resistance = analyze_image_with_gemini(contents)
+    return {"voltage": voltage, "resistance": resistance}
 
-# --- 3. API LƯU BÁO CÁO VÀO CSDL ---
-@app.post("/api/submit-report")
-async def submit_report(
+@app.post("/api/save-report")
+async def save_report(
     station_name: str = Form(...),
-    v1: float = Form(...),
-    r1: float = Form(...),
-    v2: float = Form(...),
-    r2: float = Form(...),
-    file_img1: UploadFile = File(None),
-    file_img2: UploadFile = File(None)
+    v1: float = Form(0.0), r1: float = Form(0.0),
+    v2: float = Form(0.0), r2: float = Form(0.0)
 ):
-    avg_r = round((r1 + r2) / 2, 2)
-    current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    # Lưu file ảnh lưu trữ nếu có
-    for i, file in enumerate([file_img1, file_img2], 1):
-        if file and file.filename:
-            file_path = os.path.join(UPLOAD_DIR, f"{station_name}_AQ{i}_{file.filename}")
-            with open(file_path, "wb") as f:
-                f.write(await file.read())
-            
-    # Lưu bản ghi đo vào SQLite CSDL
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO measure_history (station_name, measure_date, v1, r1, v2, r2, avg_resistance)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (station_name, current_date, v1, r1, v2, r2, avg_r))
-    conn.commit()
-    conn.close()
-    
-    print(f"--> [DB Saved] Station={station_name}, Date={current_date}, AvgR={avg_r}")
-    
-    return {
-        "status": "success",
-        "message": f"Cập nhật thành công trạm {station_name}",
-        "avg_resistance": avg_r
-    }
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO reports (station_name, v1, r1, v2, r2)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (station_name, v1, r1, v2, r2))
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Đã lưu báo cáo thành công!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# --- 4. API LẤY DỮ LIỆU LỊCH SỬ CHO BIỂU ĐỒ & BẢNG ---
-@app.get("/api/station-history/{station_name}")
-async def get_station_history(station_name: str):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT measure_date, v1, r1, v2, r2, avg_resistance 
-        FROM measure_history 
-        WHERE station_name = ? 
-        ORDER BY id ASC
-    ''', (station_name,))
-    rows = cursor.fetchall()
-    conn.close()
-    
-    history = []
-    for r in rows:
-        history.append({
-            "date": r[0],
-            "v1": r[1], "r1": r[2],
-            "v2": r[3], "r2": r[4],
-            "avg_r": r[5]
-        })
-    return {"status": "success", "station": station_name, "history": history}
+@app.get("/api/export-excel")
+def export_excel():
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        df = pd.read_sql_query("SELECT * FROM reports ORDER BY timestamp DESC", conn)
+        conn.close()
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Báo Cáo Ắc Quy')
+        output.seek(0)
+        
+        headers = {
+            'Content-Disposition': 'attachment; filename="Bao_Cao_Do_Ac_Quy.xlsx"'
+        }
+        return StreamingResponse(
+            output, 
+            headers=headers, 
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=10000, reload=True)
