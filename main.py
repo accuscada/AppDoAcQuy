@@ -47,9 +47,37 @@ def init_db():
 init_db()
 
 # Khai báo API Key của bạn
-# Lấy API Key từ Environment Variable của Render, nếu không có mới dùng chuỗi mặc định
-API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6IYn99iatQHFwlziNqamIlFxCyZz0uzsOZFOeC3coOyhw")
+import os
+import google.generativeai as genai
 
+# 1. Cấu hình API Key (Dán trực tiếp khóa API Key vừa copy vào đây)
+GEMINI_API_KEY = "AQ.Ab8RN6LuW5GlCcCW1q9k-M8wGSh1rAlDHiIkFoX6LsFVFT_PMg" 
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+def analyze_battery_image(image_bytes):
+    try:
+        # Sử dụng mô hình gemini-2.5-flash chuẩn nhất hiện tại
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        prompt = """
+        Hãy phân tích hình ảnh màn hình máy đo ắc quy này và trả về dữ liệu chuẩn JSON.
+        Yêu cầu trích xuất:
+        - voltage: Giá trị Điện áp (VDC)
+        - resistance: Giá trị Nội trở (mΩ hoặc Ω)
+        Chỉ trả về JSON thuần dạng: {"voltage": 13.5, "resistance": 4.2}
+        """
+        
+        contents = [
+            prompt,
+            {"mime_type": "image/jpeg", "data": image_bytes}
+        ]
+        
+        response = model.generate_content(contents)
+        return response.text
+    except Exception as e:
+        print(f"Lỗi kết nối Gemini API: {e}")
+        return None
 # --- 2. API QUÉT ẢNH AI VISION ---
 @app.post("/api/scan-meter")
 async def scan_meter(file: UploadFile = File(...)):
