@@ -47,7 +47,8 @@ def init_db():
 init_db()
 
 # Khai báo API Key của bạn
-API_KEY = "AQ.Ab8RN6IYn99iatQHFwlziNqamIlFxCyZz0uzsOZFOeC3coOyhw"
+# Lấy API Key từ Environment Variable của Render, nếu không có mới dùng chuỗi mặc định
+API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6IYn99iatQHFwlziNqamIlFxCyZz0uzsOZFOeC3coOyhw")
 
 # --- 2. API QUÉT ẢNH AI VISION ---
 @app.post("/api/scan-meter")
