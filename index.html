@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battery Vision - Hệ Thống Quản Lý & Giám Sát Ắc Quy</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #f8fafc;
+            --brand-primary: #1e3a8a;
+            --brand-accent: #0284c7;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            background-color: var(--bg-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: #334155;
+            padding-bottom: 60px;
+        }
+
+        .navbar-brand-custom {
+            font-weight: 700;
+            color: var(--brand-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .kpi-card {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            padding: 1.25rem;
+            box-shadow: var(--card-shadow);
+        }
+        .kpi-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .nav-segment {
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 12px;
+        }
+        .nav-segment .nav-link {
+            border-radius: 10px;
+            color: #64748b;
+            font-weight: 600;
+            padding: 10px 20px;
+            transition: all 0.2s ease;
+        }
+        .nav-segment .nav-link.active {
+            background: white;
+            color: var(--brand-primary);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .app-card {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.25rem;
+            overflow: hidden;
+        }
+        .app-card-header {
+            padding: 1rem 1.25rem;
+            background: #ffffff;
+            border-bottom: 1px solid #f1f5f9;
+            font-weight: 700;
+            color: var(--brand-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-box {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            background: #f8fafc;
+            transition: all 0.2s;
+        }
+        .upload-box:hover {
+            border-color: var(--brand-accent);
+            background: #f0f9ff;
+        }
+        .img-preview {
+            max-height: 120px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .btn-submit-main {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            border-radius: 14px;
+            padding: 14px;
+            font-weight: 700;
+            box-shadow: 0 10px 20px -5px rgba(16, 185, 129, 0.4);
+            transition: transform 0.1s ease;
+        }
+        .btn-submit-main:active {
+            transform: scale(0.98);
+        }
+
+        .scan-loading {
+            display: none;
+            font-size: 0.85rem;
+            color: var(--brand-accent);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP HEADER -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom sticky-top py-2 mb-4">
+        <div class="container" style="max-width: 1000px;">
+            <a class="navbar-brand navbar-brand-custom d-flex align-items-center gap-2" href="#">
+                <i class="fa-solid fa-battery-three-quarters text-primary fs-4"></i>
+                <span>BATTERY<span class="text-primary">VISION</span></span>
+            </a>
+            <span class="badge bg-primary-subtle text-primary fw-semibold px-3 py-2 rounded-pill">
+                <i class="fa-solid fa-circle text-success me-1 fs-6"></i> Server Online
+            </span>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 1000px;">
+
+        <!-- DASHBOARD OVERVIEW -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-4">
+                <div class="kpi-card d-flex align-items-center gap-3">
+                    <div class="kpi-icon bg-primary-subtle text-primary">
+                        <i class="fa-solid fa-building-circle-check"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-medium">Trạm Quản Lý</div>
+                        <div class="fw-bold fs-5">3 Trạm</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="kpi-card d-flex align-items-center gap-3">
+                    <div class="kpi-icon bg-success-subtle text-success">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-medium">Trạng Thái Tốt</div>
+                        <div class="fw-bold fs-5 text-success">100%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="kpi-card d-flex align-items-center gap-3">
+                    <div class="kpi-icon bg-warning-subtle text-warning">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-medium">Cập Nhật Gần Nhất</div>
+                        <div class="fw-bold fs-6" id="lastUpdated">Vừa xong</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN TABS NAVIGATION -->
+        <ul class="nav nav-segment nav-justified mb-4" id="appTabs">
+            <li class="nav-item">
+                <button class="nav-link active" onclick="switchTab('inputTab')">
+                    <i class="fa-solid fa-camera me-2"></i>Nhập Liệu Hiện Trường
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="switchTab('historyTab')">
+                    <i class="fa-solid fa-chart-line me-2"></i>Theo Dõi & Biểu Đồ
+                </button>
+            </li>
+        </ul>
+
+        <!-- ================= TAB 1: NHẬP LIỆU ================= -->
+        <div id="inputTab">
+            
+            <!-- CHỌN TRẠM -->
+            <div class="app-card">
+                <div class="app-card-header">
+                    <i class="fa-solid fa-location-dot text-danger"></i>
+                    <span>Vị Trí Kiểm Tra</span>
+                </div>
+                <div class="p-3">
+                    <select id="stationSelect" class="form-select form-select-lg fw-semibold text-dark">
+                        <option value="B.O.C">Trạm B.O.C</option>
+                        <option value="TRAM_A">Trạm A - Tân Bình</option>
+                        <option value="TRAM_B">Trạm B - Bến Thành</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- ẮC QUY 1 -->
+            <div class="app-card">
+                <div class="app-card-header justify-content-between">
+                    <div><i class="fa-solid fa-car-battery text-primary"></i> Ắc Quy 01</div>
+                    <span class="scan-loading" id="loading1"><i class="fa-solid fa-spinner fa-spin me-1"></i> AI đang phân tích...</span>
+                </div>
+                <div class="p-3">
+                    <div class="upload-box mb-3" onclick="document.getElementById('img1').click()">
+                        <input type="file" id="img1" class="d-none" accept="image/*" onchange="handleFileSelect(1)">
+                        <div id="uploadContent1">
+                            <i class="fa-solid fa-cloud-arrow-up fs-2 text-muted mb-2"></i>
+                            <div class="fw-semibold">Chụp ảnh hoặc tải lên máy đo AQ1</div>
+                            <small class="text-muted">Hệ thống sẽ tự bóc tách Điện áp & Nội trở</small>
+                        </div>
+                        <img id="preview1" class="img-preview d-none mt-2" alt="Preview 1">
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label small text-muted fw-bold">DỰ BÁO ĐIỆN ÁP (V)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-primary"><i class="fa-solid fa-bolt"></i></span>
+                                <input type="number" step="0.001" id="v1" class="form-control form-control-lg fw-bold text-primary" placeholder="0.000">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-muted fw-bold">NỘI TRỞ (mΩ)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-danger"><i class="fa-solid fa-wave-square"></i></span>
+                                <input type="number" step="0.01" id="r1" class="form-control form-control-lg fw-bold text-danger" placeholder="0.00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ẮC QUY 2 -->
+            <div class="app-card">
+                <div class="app-card-header justify-content-between">
+                    <div><i class="fa-solid fa-car-battery text-primary"></i> Ắc Quy 02</div>
+                    <span class="scan-loading" id="loading2"><i class="fa-solid fa-spinner fa-spin me-1"></i> AI đang phân tích...</span>
+                </div>
+                <div class="p-3">
+                    <div class="upload-box mb-3" onclick="document.getElementById('img2').click()">
+                        <input type="file" id="img2" class="d-none" accept="image/*" onchange="handleFileSelect(2)">
+                        <div id="uploadContent2">
+                            <i class="fa-solid fa-cloud-arrow-up fs-2 text-muted mb-2"></i>
+                            <div class="fw-semibold">Chụp ảnh hoặc tải lên máy đo AQ2</div>
+                            <small class="text-muted">Hệ thống sẽ tự bóc tách Điện áp & Nội trở</small>
+                        </div>
+                        <img id="preview2" class="img-preview d-none mt-2" alt="Preview 2">
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label small text-muted fw-bold">DỰ BÁO ĐIỆN ÁP (V)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-primary"><i class="fa-solid fa-bolt"></i></span>
+                                <input type="number" step="0.001" id="v2" class="form-control form-control-lg fw-bold text-primary" placeholder="0.000">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-muted fw-bold">NỘI TRỞ (mΩ)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-danger"><i class="fa-solid fa-wave-square"></i></span>
+                                <input type="number" step="0.01" id="r2" class="form-control form-control-lg fw-bold text-danger" placeholder="0.00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBMIT BUTTON -->
+            <button onclick="submitReport()" class="btn btn-success btn-submit-main w-100 text-white fs-5 mt-2">
+                <i class="fa-solid fa-floppy-disk me-2"></i>LƯU & BÁO CÁO KẾT QUẢ
+            </button>
+
+        </div>
+
+        <!-- ================= TAB 2: LỊCH SỬ & BIỂU ĐỒ ================= -->
+        <div id="historyTab" style="display: none;">
+            
+            <div class="app-card p-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <label class="fw-bold text-secondary m-0">Chọn vị trí xem báo cáo:</label>
+                    <select id="historyStationSelect" class="form-select w-auto fw-bold" onchange="loadStationHistory()">
+                        <option value="B.O.C">Trạm B.O.C</option>
+                        <option value="TRAM_A">Trạm A - Tân Bình</option>
+                        <option value="TRAM_B">Trạm B - Bến Thành</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- BIỂU ĐỒ DIỄN BIẾN -->
+            <div class="app-card">
+                <div class="app-card-header">
+                    <i class="fa-solid fa-chart-area text-primary"></i>
+                    <span>Xu Hướng Biến Thiên Theo Thời Gian</span>
+                </div>
+                <div class="p-3">
+                    <canvas id="resistanceChart" style="max-height: 320px;"></canvas>
+                </div>
+            </div>
+
+            <!-- BẢNG LỊCH SỬ -->
+            <div class="app-card">
+                <div class="app-card-header justify-content-between">
+                    <div><i class="fa-solid fa-list-check text-secondary"></i> Nhật Ký Đo Hàng Tháng</div>
+                </div>
+                <div class="p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle text-center m-0">
+                            <thead class="bg-light text-muted small">
+                                <tr>
+                                    <th class="py-3">Thời gian</th>
+                                    <th>AQ1 (V)</th>
+                                    <th>AQ1 (mΩ)</th>
+                                    <th>AQ2 (V)</th>
+                                    <th>AQ2 (mΩ)</th>
+                                    <th>Nội trở TB</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody" class="fw-medium">
+                                <tr><td colspan="6" class="text-muted py-4">Đang tải lịch sử...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        const API_URL = "http://localhost:8000";
+        let chartInstance = null;
+
+        function switchTab(tabId) {
+            document.getElementById('inputTab').style.display = tabId === 'inputTab' ? 'block' : 'none';
+            document.getElementById('historyTab').style.display = tabId === 'historyTab' ? 'block' : 'none';
+            
+            const buttons = document.querySelectorAll('#appTabs .nav-link');
+            buttons[0].classList.toggle('active', tabId === 'inputTab');
+            buttons[1].classList.toggle('active', tabId === 'historyTab');
+
+            if(tabId === 'historyTab') {
+                loadStationHistory();
+            }
+        }
+
+        function handleFileSelect(aqIndex) {
+            const fileInput = document.getElementById(`img${aqIndex}`);
+            const preview = document.getElementById(`preview${aqIndex}`);
+            const uploadContent = document.getElementById(`uploadContent${aqIndex}`);
+
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('d-none');
+                    uploadContent.classList.add('d-none');
+                }
+                reader.readAsDataURL(fileInput.files[0]);
+                
+                uploadAndScan(aqIndex);
+            }
+        }
+
+        async function uploadAndScan(aqIndex) {
+            const fileInput = document.getElementById(`img${aqIndex}`);
+            const loading = document.getElementById(`loading${aqIndex}`);
+            if (!fileInput || !fileInput.files[0]) return;
+
+            if (loading) loading.style.display = 'inline-block';
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            try {
+                const res = await fetch(`${API_URL}/api/scan-meter`, { 
+                    method: "POST", 
+                    body: formData 
+                });
+                const data = await res.json();
+                
+                if (data.status === "success") {
+                    if (data.voltage !== null && data.voltage !== undefined) {
+                        document.getElementById(`v${aqIndex}`).value = data.voltage;
+                    }
+                    if (data.resistance !== null && data.resistance !== undefined) {
+                        document.getElementById(`r${aqIndex}`).value = data.resistance;
+                    }
+                } else {
+                    alert("Không thể đọc được số từ ảnh AQ" + aqIndex + ": " + (data.message || ""));
+                }
+            } catch (e) {
+                console.error("Lỗi kết nối:", e);
+                alert("Lỗi kết nối Server khi quét ảnh!");
+            } finally {
+                if (loading) loading.style.display = 'none';
+            }
+        }
+
+        async function submitReport() {
+            const formData = new FormData();
+            formData.append("station_name", document.getElementById("stationSelect").value);
+            formData.append("v1", document.getElementById("v1").value || 0);
+            formData.append("r1", document.getElementById("r1").value || 0);
+            formData.append("v2", document.getElementById("v2").value || 0);
+            formData.append("r2", document.getElementById("r2").value || 0);
+
+            const img1 = document.getElementById("img1").files[0];
+            const img2 = document.getElementById("img2").files[0];
+            if (img1) formData.append("file_img1", img1);
+            if (img2) formData.append("file_img2", img2);
+
+            try {
+                const res = await fetch(`${API_URL}/api/submit-report`, { method: "POST", body: formData });
+                const data = await res.json();
+                if (data.status === "success") {
+                    alert("🎉 " + data.message);
+                    document.getElementById("lastUpdated").innerText = "Vừa xong";
+                }
+            } catch (e) {
+                alert("Lỗi gửi báo cáo!");
+            }
+        }
+
+        async function loadStationHistory() {
+            const station = document.getElementById("historyStationSelect").value;
+            try {
+                const res = await fetch(`${API_URL}/api/station-history/${station}`);
+                const data = await res.json();
+                
+                if (data.status === "success") {
+                    renderHistoryTable(data.history);
+                    renderChart(data.history);
+                }
+            } catch (e) {
+                console.error("Lỗi tải lịch sử:", e);
+            }
+        }
+
+        function renderHistoryTable(history) {
+            const tbody = document.getElementById("historyTableBody");
+            if (!history || history.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-muted py-4">Chưa có lịch sử đo cho trạm này</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = history.map(item => `
+                <tr>
+                    <td class="text-muted small">${item.date}</td>
+                    <td class="text-primary">${item.v1} V</td>
+                    <td class="text-danger fw-bold">${item.r1} mΩ</td>
+                    <td class="text-primary">${item.v2} V</td>
+                    <td class="text-danger fw-bold">${item.r2} mΩ</td>
+                    <td><span class="badge bg-primary-subtle text-primary px-2 py-1">${item.avg_r} mΩ</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderChart(history) {
+            const ctx = document.getElementById('resistanceChart').getContext('2d');
+            
+            const labels = history.map(h => h.date);
+            const dataR1 = history.map(h => h.r1);
+            const dataR2 = history.map(h => h.r2);
+            const dataAvg = history.map(h => h.avg_r);
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'AQ1 Nội trở (mΩ)', data: dataR1, borderColor: '#ef4444', backgroundColor: '#ef4444', tension: 0.3 },
+                        { label: 'AQ2 Nội trở (mΩ)', data: dataR2, borderColor: '#0284c7', backgroundColor: '#0284c7', tension: 0.3 },
+                        { label: 'Nội Trở TB (mΩ)', data: dataAvg, borderColor: '#10b981', borderDash: [6, 6], tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        y: { title: { display: true, text: 'Gía trị Nội Trở (mΩ)' }, grid: { color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
